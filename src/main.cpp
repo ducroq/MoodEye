@@ -101,10 +101,5 @@ void loop() {
     
     hue = (hue + 1) & 0xFF;  // Cycle hue
     
-    // Check touch input
-    Wire.beginTransmission(TOUCH_I2C_ADDR);
-    Wire.requestFrom(TOUCH_I2C_ADDR, 1);
-    Wire.endTransmission();
-    
-    delay(20);  // 50 FPS
+    delay(100);  // 50 FPS
 }
