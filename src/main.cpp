@@ -2,29 +2,29 @@
 #include <Arduino.h>
 #include <HardwareSerial.h>
 #include <LovyanGFX.hpp>
-// #include <LGFX_AUTODETECT.hpp>
 #include "config.h"
 
-
-class LGFX : public lgfx::LGFX_Device {
+class LGFX : public lgfx::LGFX_Device
+{
     lgfx::Panel_GC9A01 _panel_instance;
     lgfx::Bus_SPI _bus_instance;
 
 public:
-    LGFX(void) {
+    LGFX(void)
+    {
         { // Bus configuration
             auto cfg = _bus_instance.config();
             cfg.spi_host = VSPI_HOST;
             cfg.spi_mode = 0;
-            cfg.freq_write = 40000000;    // Write frequency 40MHz
-            cfg.freq_read = 16000000;     // Read frequency 16MHz
+            cfg.freq_write = 80000000; // Write frequency 80MHz
+            cfg.freq_read = 16000000;  // Read frequency 16MHz
             cfg.spi_3wire = true;
             cfg.use_lock = true;
             cfg.dma_channel = 1;
-            cfg.pin_sclk = TFT_SCK;       // SCK from config
-            cfg.pin_mosi = TFT_MOSI;      // MOSI from config
-            cfg.pin_miso = -1;            // MISO not used
-            cfg.pin_dc = TFT_DC;          // DC from config
+            cfg.pin_sclk = TFT_SCK;  // SCK from config
+            cfg.pin_mosi = TFT_MOSI; // MOSI from config
+            cfg.pin_miso = -1;       // MISO not used
+            cfg.pin_dc = TFT_DC;     // DC from config
             _bus_instance.config(cfg);
             _panel_instance.setBus(&_bus_instance);
         }
@@ -45,7 +45,7 @@ public:
             cfg.dummy_read_bits = 1;
             cfg.readable = true;
             cfg.invert = true;
-            cfg.rgb_order = true;
+            cfg.rgb_order = false; // The GC9A01 sometimes needs its RGB color order adjusted because different manufacturers wire the display differently.
             cfg.dlen_16bit = false;
             cfg.bus_shared = true;
             _panel_instance.config(cfg);
@@ -55,51 +55,97 @@ public:
 };
 
 LGFX display;
+LGFX_Sprite *sprite = nullptr; // sprite for double buffering
 
-void setup() {
+uint16_t rainbowColor(uint8_t hue) {
+    uint8_t r, g, b;
+    if(hue < 85) {
+        r = hue * 3;
+        g = 255 - hue * 3;
+        b = 0;
+    } else if(hue < 170) {
+        hue -= 85;
+        r = 255 - hue * 3;
+        g = 0;
+        b = hue * 3;
+    } else {
+        hue -= 170;
+        r = 0;
+        g = hue * 3;
+        b = 255 - hue * 3;
+    }
+    return display.color565(r, g, b);
+}
+
+void setup()
+{
     Serial2.begin(SERIAL_BAUD);
-    
-    // Initialize I2C for touch
-    Wire.begin(TOUCH_SDA, TOUCH_SCL);
-    
+
     // Initialize display
-    display.init();
+    if (!display.init())
+    {
+        printf("Display initialization failed!\n");
+        return;
+    }
+    printf("Display initialized\n");
     display.setRotation(0);
     display.setBrightness(DISPLAY_BRIGHTNESS_DEFAULT);
-    
+
     // Setup backlight
     pinMode(TFT_BL, OUTPUT);
     digitalWrite(TFT_BL, HIGH);
-    
+
     // Clear screen
     display.fillScreen(TFT_BLACK);
 
-    printf("Display initialized successfully\n");
-    
-    // Serial.println("Display initialized successfully");
+    // Create sprite
+    sprite = new LGFX_Sprite(&display);
+    if (!sprite)
+    {
+        printf("Failed to allocate sprite!\n");
+        return;
+    }
+
+    sprite->setColorDepth(8); // The ESP32 doesn't have enough memory to create a full 240x240 sprite buffer (which would require 240 * 240 * 2 = 115,200 bytes for 16-bit color)
+
+    if (!sprite->createSprite(SCREEN_WIDTH, SCREEN_HEIGHT))
+    {
+        printf("Failed to create sprite at full size, trying half size...\n");
+        delete sprite;
+        sprite = nullptr;
+        return;
+    }
+
+    printf("Sprite created successfully with dimensions: %dx%d\n",
+           sprite->width(), sprite->height());
+
+    // Draw something to the display directly first to ensure it's working
+    display.fillCircle(120, 120, 30, display.color565(255, 0, 0));
+    delay(1000);
+
+    printf("Setup complete\n");
 }
 
-void loop() {
+void loop()
+{
     static uint32_t hue = 0;
-    static int32_t x = 120;
-    static int32_t y = 120;
-    static int32_t r = 60;
+    static const int32_t center_x = SCREEN_WIDTH / 2;
+    static const int32_t center_y = SCREEN_HEIGHT / 2;
+    static const int32_t max_radius = SCREEN_WIDTH / 2 - 5;
 
-    // Create a smooth circular animation
-    display.fillScreen(TFT_BLACK);
-    
+    sprite->fillSprite(TFT_BLACK);
+
     // Draw multiple concentric circles with changing colors
-    for (int32_t i = r; i > 0; i -= 15) {
-        display.fillCircle(x, y, i, 
-            display.color565(
-                (hue + i) & 0xFF,       // R
-                (hue + i + 85) & 0xFF,  // G
-                (hue + i + 170) & 0xFF  // B
-            )
-        );
+    for (int32_t i = max_radius; i > 0; i -= 15)
+    {
+        uint8_t hue_val = (hue + i) & 0xFF;
+        uint16_t color = rainbowColor(hue_val);
+        sprite->fillCircle(center_x, center_y, i, color);
     }
-    
-    hue = (hue + 1) & 0xFF;  // Cycle hue
-    
-    delay(100);  // 50 FPS
+
+    hue = (hue + 1) & 0xFF; // Cycle hue
+
+    sprite->pushSprite(0, 0); // Push sprite to display in one operation
+
+    // delay(20); // 50 FPS
 }
