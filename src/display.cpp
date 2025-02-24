@@ -119,7 +119,9 @@ void displayTask(void *parameter)
 
     printf("Display initialized\n");
 
-    float hue = 0;
+    int16_t min_hue = 10, max_hue = 350;
+    int16_t hue = min_hue;
+    bool rising = true;
     ProximityData lastData = {.rssi = -100, .timestamp = 0};
 
     while (1)
@@ -136,10 +138,23 @@ void displayTask(void *parameter)
             lastData.rssi = -100;
         }
 
+        if (rising && hue >= max_hue)
+        {
+            rising = false;
+        }
+        else if (!rising && hue <= min_hue)
+        {
+            rising = true;
+        }
+        hue = (rising) ? hue + 1 : hue - 1;
+
         float rssiIntensity = map(lastData.rssi, -100, -40, 50, 255) / 255.0;
         int32_t targetRadius = mapRSSItoRadius(lastData.rssi);
         int numCircles = map(targetRadius, 20, 90, 2, 6);
+        
+        printf("RSSI: %f, Radius: %i, hue %i \n", rssiIntensity, targetRadius, hue);
 
+// # something is wrong with the numbers
         sprite->fillSprite(TFT_BLACK);
 
         for (int i = 0; i < numCircles; i++)
@@ -149,17 +164,13 @@ void displayTask(void *parameter)
             // hue: 0-359, saturation: 0-255, value: 0-255
             float saturation = 100;  // Full saturation
             float value = 100 * (rssiIntensity);  // Value controlled by RSSI intensity
-            RGBColor color = hsv2rgb((float)hue, saturation, value);
+            RGBColor color = hsv2rgb((float)(hue * i / numCircles), saturation, value);
 
             sprite->fillCircle(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, currentRadius, 
                 display.color565(color.r, color.b, color.g));
         }
 
         sprite->pushSprite(0, 0);
-
-        printf("RSSI: %f, Radius: %i, hue %f \n", rssiIntensity, targetRadius, hue);
-
-        hue = (hue < 359) ? hue + 1 : 0;
 
         vTaskDelay(pdMS_TO_TICKS(50));
     }

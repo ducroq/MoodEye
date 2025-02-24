@@ -15,5 +15,6 @@ extern TaskHandle_t displayTaskHandle;
 
 // Constants
 const int QUEUE_SIZE = 10;
-const int BLE_TASK_STACK = 4096;
+const int BLE_TASK_STACK = 8092;
 const int DISPLAY_TASK_STACK = 4096;
+

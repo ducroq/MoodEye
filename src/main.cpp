@@ -9,36 +9,43 @@ TaskHandle_t bleTaskHandle;
 TaskHandle_t displayTaskHandle;
 
 // Test task to simulate BLE data
-void testTask(void * parameter) {
+void testTask(void *parameter)
+{
     int fakeRSSI = -100;
     bool getting_closer = true;
-    
-    while(1) {
+
+    while (1)
+    {
         ProximityData data = {
             .rssi = fakeRSSI,
-            .timestamp = millis()
-        };
-        
+            .timestamp = millis()};
+
         xQueueSend(rssiQueue, &data, 0);
-        
+
         // Simulate moving closer and further
-        if (getting_closer) {
+        if (getting_closer)
+        {
             fakeRSSI += 2;
-            if (fakeRSSI > -40) {
+            if (fakeRSSI > -40)
+            {
                 getting_closer = false;
             }
-        } else {
+        }
+        else
+        {
             fakeRSSI -= 2;
-            if (fakeRSSI < -100) {
+            if (fakeRSSI < -100)
+            {
                 getting_closer = true;
             }
         }
-        
-        vTaskDelay(pdMS_TO_TICKS(100));  // Update every 100ms
+
+        vTaskDelay(pdMS_TO_TICKS(100)); // Update every 100ms
     }
 }
 
-void setup() {
+void setup()
+{
     Serial2.begin(SERIAL_BAUD);
     printf("Starting MoodEye...\n");
 
@@ -53,27 +60,27 @@ void setup() {
 
     // Create queue for RSSI data
     rssiQueue = xQueueCreate(QUEUE_SIZE, sizeof(ProximityData));
-    
-    // Create tasks
+
     // Create test task to simulate BLE data
     xTaskCreate(
         testTask,
         "Test Task",
         2048,
         NULL,
-        1,
+        0,
         NULL
     );
-    //     xTaskCreatePinnedToCore(
-    //     bleTask,
-    //     "BLE Task",
-    //     BLE_TASK_STACK,
-    //     NULL,
-    //     1,
-    //     &bleTaskHandle,
-    //     0  // Run on Core 0
+
+    // BaseType_t result = xTaskCreatePinnedToCore(
+    //     bleTask,        // Task function
+    //     "BLETask",      // Task name
+    //     BLE_TASK_STACK, // Stack size (bytes)
+    //     NULL,           // Parameters
+    //     5,              // Priority
+    //     &bleTaskHandle, // Task handle
+    //     0               // Core (0 or 1)
     // );
-    
+
     xTaskCreatePinnedToCore(
         displayTask,
         "Display Task",
@@ -85,6 +92,7 @@ void setup() {
     );
 }
 
-void loop() {
+void loop()
+{
     vTaskDelete(NULL);
 }
